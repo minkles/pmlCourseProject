@@ -1,0 +1,103 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta http-equiv="Content-Style-Type" content="text/css">
+  <title>Practical Machine Learning Course Project</title>
+  <meta name="Generator" content="Cocoa HTML Writer">
+  <meta name="CocoaVersion" content="1265.21">
+  <style type="text/css">
+    p.p3 {margin: 0.0px 0.0px 12.0px 0.0px; font: 12.0px Helvetica}
+    p.p4 {margin: 0.0px 0.0px 12.0px 0.0px; font: 12.0px Helvetica; color: #0000ee}
+    p.p5 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px 'Lucida Console'; background-color: #f8f8f8}
+    p.p6 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px 'Lucida Console'}
+    p.p7 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px 'Lucida Console'; min-height: 12.0px}
+    span.s1 {color: #000000}
+    span.s2 {text-decoration: underline}
+  </style>
+</head>
+<body>
+<h1 style="margin: 0.0px 0.0px 17.7px 0.0px; font: 26.0px Helvetica"><b>Practical Machine Learning Course Project</b></h1>
+<h2 style="margin: 0.0px 0.0px 17.9px 0.0px; font: 22.0px Helvetica"><b>Executive Summary</b></h2>
+<p class="p3">The goal of this project is to create a machine learning algorithm to predict, based on accelerometer data, whether or not an individual is doing an exercise properly or improperly.</p>
+<p class="p3">The training dataset contains accelerometer readings from 6 participants each performing one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in one of five ways: A: Exactly according to the specification B: Throwing the elbows to the front C: Lifting the dumbbell only halfway D: Lowering the dumbbell only halfway E: Throwing the hips to the front.</p>
+<p class="p3">My algorithm will predict, with over 98% accuracy, which of the five ways of lifting is being done, based on accelerometer readings from the arm, belt, forearm, and dumbbell itself.</p>
+<p class="p3">Data comes from the following source:</p>
+<p class="p3">Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements. Proceedings of 21st Brazilian Symposium on Artificial Intelligence. Advances in Artificial Intelligence - SBIA 2012. In: Lecture Notes in Computer Science. , pp. 52-61. Curitiba, PR: Springer Berlin / Heidelberg, 2012. ISBN 978-3-642-34458-9. DOI: 10.1007/978-3-642-34459-6_6.</p>
+<p class="p4"><span class="s1">Read more: <a href="http://groupware.les.inf.puc-rio.br/har#ixzz3paO4q4fo"><span class="s2">http://groupware.les.inf.puc-rio.br/har#ixzz3paO4q4fo</span></a></span></p>
+<h2 style="margin: 0.0px 0.0px 17.9px 0.0px; font: 22.0px Helvetica"><b>Loading Required Packages and Data, and setting the seed</b></h2>
+<p class="p3">This algorithm makes use of functions from the caret package. To be able to reproduce my results I set the seed to 1024.</p>
+<p class="p5">library(caret)</p>
+<p class="p6">## Loading required package: lattice</p>
+<p class="p6">## Loading required package: ggplot2</p>
+<p class="p5">wleTrain &lt;- read.csv("pml-training.csv")</p>
+<p class="p5">wleTest &lt;- read.csv("pml-testing.csv")</p>
+<p class="p5">set.seed(1024)</p>
+<h2 style="margin: 0.0px 0.0px 17.9px 0.0px; font: 22.0px Helvetica"><b>Subsetting</b></h2>
+<p class="p3">A summary of the data shows 120 variables in the training set. However, many of these variables are summary or index variables which will not be useful for building my algorithm.</p>
+<p class="p3">First, I remove the index variables.</p>
+<p class="p5">wleTrain &lt;- wleTrain[,-(1:7)]</p>
+<p class="p3">Next, I subset only the numerical variables, because the summary variables are factors and will not have an influence on the machine learning algorithm. The result variable, “classe”, is also a factor, but I will add that back later. Before I do anything to wleTrain, I need to save the “classe” values to add back later.</p>
+<p class="p5">classe &lt;- wleTrain$classe</p>
+<p class="p5">wleTrain &lt;- wleTrain[sapply(wleTrain, is.numeric)]</p>
+<p class="p3">Next, I remove variables that contain NA values. These variables are calculated from the raw data, so they will not be necessary in the algorithm.</p>
+<p class="p5">wleTrain &lt;- wleTrain[sapply(wleTrain, function(x) !any(is.na(x)))]</p>
+<p class="p3">Finally, I add back the classe variable. When this is done, I have reduced the number of variables from 120 to 53 without losing any important data.</p>
+<p class="p5">wleTrain &lt;- cbind(wleTrain,classe)</p>
+<p class="p3">##Fitting the model</p>
+<p class="p3">I chose to use a random forest model for its high accuracy rates and usefulness in predicting categorical data.</p>
+<p class="p3">I also chose to include Principal Components Analysis in my model because there is a large number of variables, and many of them are highly correlated with each other. This makes sense, because a single movement of a single sensor creates many raw variables: acceleration, gyroscope, and magnet reading in 3 directions, so we would expect these values to be highly correlated.</p>
+<p class="p5">M &lt;- abs(cor(wleTrain[,-53]))</p>
+<p class="p5">diag(M) &lt;- 0</p>
+<p class="p5">which(M &gt; 0.9,arr.ind=T)</p>
+<p class="p6">##<span class="Apple-converted-space">                  </span>row col</p>
+<p class="p6">## total_accel_belt <span class="Apple-converted-space">  </span>4 <span class="Apple-converted-space">  </span>1</p>
+<p class="p6">## accel_belt_y <span class="Apple-converted-space">      </span>9 <span class="Apple-converted-space">  </span>1</p>
+<p class="p6">## accel_belt_z<span class="Apple-converted-space">      </span>10 <span class="Apple-converted-space">  </span>1</p>
+<p class="p6">## accel_belt_x <span class="Apple-converted-space">      </span>8 <span class="Apple-converted-space">  </span>2</p>
+<p class="p6">## roll_belt<span class="Apple-converted-space">          </span>1 <span class="Apple-converted-space">  </span>4</p>
+<p class="p6">## accel_belt_y <span class="Apple-converted-space">      </span>9 <span class="Apple-converted-space">  </span>4</p>
+<p class="p6">## accel_belt_z<span class="Apple-converted-space">      </span>10 <span class="Apple-converted-space">  </span>4</p>
+<p class="p6">## pitch_belt <span class="Apple-converted-space">        </span>2 <span class="Apple-converted-space">  </span>8</p>
+<p class="p6">## roll_belt<span class="Apple-converted-space">          </span>1 <span class="Apple-converted-space">  </span>9</p>
+<p class="p6">## total_accel_belt <span class="Apple-converted-space">  </span>4 <span class="Apple-converted-space">  </span>9</p>
+<p class="p6">## accel_belt_z<span class="Apple-converted-space">      </span>10 <span class="Apple-converted-space">  </span>9</p>
+<p class="p6">## roll_belt<span class="Apple-converted-space">          </span>1<span class="Apple-converted-space">  </span>10</p>
+<p class="p6">## total_accel_belt <span class="Apple-converted-space">  </span>4<span class="Apple-converted-space">  </span>10</p>
+<p class="p6">## accel_belt_y <span class="Apple-converted-space">      </span>9<span class="Apple-converted-space">  </span>10</p>
+<p class="p6">## gyros_arm_y <span class="Apple-converted-space">      </span>19<span class="Apple-converted-space">  </span>18</p>
+<p class="p6">## gyros_arm_x <span class="Apple-converted-space">      </span>18<span class="Apple-converted-space">  </span>19</p>
+<p class="p6">## gyros_dumbbell_z<span class="Apple-converted-space">  </span>33<span class="Apple-converted-space">  </span>31</p>
+<p class="p6">## gyros_forearm_z <span class="Apple-converted-space">  </span>46<span class="Apple-converted-space">  </span>31</p>
+<p class="p6">## gyros_dumbbell_x<span class="Apple-converted-space">  </span>31<span class="Apple-converted-space">  </span>33</p>
+<p class="p6">## gyros_forearm_z <span class="Apple-converted-space">  </span>46<span class="Apple-converted-space">  </span>33</p>
+<p class="p6">## gyros_dumbbell_x<span class="Apple-converted-space">  </span>31<span class="Apple-converted-space">  </span>46</p>
+<p class="p6">## gyros_dumbbell_z<span class="Apple-converted-space">  </span>33<span class="Apple-converted-space">  </span>46</p>
+<p class="p3">My final model is as follows:</p>
+<p class="p5">modelFit &lt;- train(wleTrain$classe ~ .,method="rf",preProcess="pca",data=wleTrain)</p>
+<p class="p7"><br></p>
+<p class="p3">##Cross validation</p>
+<p class="p3">I chose to cross-validate using k-folds to ensure the model was not being overfitted. In my original cross-validation, I created 10 folds and found an average error rate of 1.7888%. However, due to the slow processing speed of random forests, for this writeup I will recreate the validation using only 5 folds. As you can see, the error rate is similar to the one I originally calculated.</p>
+<p class="p3">I expect my out-of-sample error rate to be close to 1.7888%.</p>
+<p class="p5">folds &lt;- createFolds(y=wleTrain$classe,k=5,list=TRUE,returnTrain=TRUE)</p>
+<p class="p5">kerrors &lt;- vector()</p>
+<p class="p5">for (i in 1:length(folds)) {</p>
+<p class="p5"><span class="Apple-converted-space">  </span>inTrain &lt;- folds[[i]]</p>
+<p class="p5"><span class="Apple-converted-space">  </span>ktrain &lt;- wleTrain[inTrain,]</p>
+<p class="p5"><span class="Apple-converted-space">  </span>ktest &lt;- wleTrain[-inTrain,]</p>
+<p class="p5"><span class="Apple-converted-space">  </span>kFit &lt;- train(ktrain$classe ~ ., method="rf",preProcess="pca",data=ktrain)</p>
+<p class="p5"><span class="Apple-converted-space">  </span>predictions &lt;- predict(kFit, newdata=ktest)</p>
+<p class="p5"><span class="Apple-converted-space">  </span>kerror &lt;- mean(predictions != ktest$classe)</p>
+<p class="p5"><span class="Apple-converted-space">  </span>print (kerror)</p>
+<p class="p5"><span class="Apple-converted-space">  </span>kerrors &lt;- c(kerrors, kerror)</p>
+<p class="p5">}</p>
+<p class="p6">## [1] 0.01911</p>
+<p class="p6">## [1] 0.01759</p>
+<p class="p6">## [1] 0.01809</p>
+<p class="p6">## [1] 0.02166</p>
+<p class="p6">## [1] 0.02446</p>
+<p class="p5">errorRate &lt;- mean(kerrors)</p>
+<p class="p5">paste0("Average error rate: ", errorRate)</p>
+<p class="p6">## [1] "Average error rate: 0.0201813830314467"</p>
+</body>
+</html>
